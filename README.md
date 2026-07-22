@@ -58,7 +58,15 @@ postgresql://username:mypassword@localhost:5432/mydb
 pnpm run build
 ```
 
-The build step will create tables in your database if you are installing for the first time. It will also create a login user with username **admin** and password **umami**.
+The build step generates the application assets and Prisma client without connecting to PostgreSQL. This allows hosted build environments such as EdgeOne Pages to build even when their build workers cannot reach the database.
+
+For a traditional server deployment where the build machine can access PostgreSQL, use the database-aware build instead:
+
+```bash
+pnpm run build-with-db-check
+```
+
+This runs the database version check and migrations. It also creates a login user with username **admin** and password **umami** when installing for the first time. For EdgeOne Pages, run `pnpm run check-db` or `pnpm run update-db` separately from an environment that can reach the database before the first deployment and after schema updates.
 
 ### Start the Application
 
