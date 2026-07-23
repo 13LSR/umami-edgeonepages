@@ -1,16 +1,16 @@
-import { startOfHour, startOfMonth } from 'date-fns';
 import { isbot } from 'isbot';
 import { serializeError } from 'serialize-error';
 import { z } from 'zod';
 import clickhouse from '@/lib/clickhouse';
 import { COLLECTION_TYPE, EVENT_TYPE } from '@/lib/constants';
-import { hash, secret, uuid } from '@/lib/crypto';
+import { secret } from '@/lib/crypto';
 import { getClientInfo, hasBlockedIp } from '@/lib/detect';
 import { createToken, parseToken } from '@/lib/jwt';
 import { fetchWebsite } from '@/lib/load';
 import { parseRequest } from '@/lib/request';
 import { badRequest, forbidden, json, serverError } from '@/lib/response';
 import { anyObjectParam, urlOrPathParam } from '@/lib/schema';
+import { getSessionId, getVisitId } from '@/lib/session';
 import { safeDecodeURI, safeDecodeURIComponent } from '@/lib/url';
 import { createSession, saveEvent, saveSessionData } from '@/queries/sql';
 
@@ -130,10 +130,7 @@ export async function POST(request: Request) {
     const createdAt = timestamp ? new Date(timestamp * 1000) : new Date();
     const now = Math.floor(Date.now() / 1000);
 
-    const sessionSalt = hash(startOfMonth(createdAt).toUTCString());
-    const visitSalt = hash(startOfHour(createdAt).toUTCString());
-
-    const sessionId = id ? uuid(sourceId, id) : uuid(sourceId, ip, userAgent, sessionSalt);
+    const sessionId = getSessionId(sourceId, id, ip, userAgent, createdAt);
 
     // Create a session if not found
     if (!clickhouse.enabled && !cache?.sessionId) {
@@ -154,12 +151,12 @@ export async function POST(request: Request) {
     }
 
     // Visit info
-    let visitId = cache?.visitId || uuid(sessionId, visitSalt);
+    let visitId = cache?.visitId || getVisitId(sessionId, createdAt);
     let iat = cache?.iat || now;
 
     // Expire visit after 30 minutes
     if (!timestamp && now - iat > 1800) {
-      visitId = uuid(sessionId, visitSalt);
+      visitId = getVisitId(sessionId, createdAt);
       iat = now;
     }
 

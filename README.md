@@ -68,6 +68,18 @@ pnpm run build-with-db-check
 
 This runs the database version check and migrations. It also creates a login user with username **admin** and password **umami** when installing for the first time. For EdgeOne Pages, run `pnpm run check-db` or `pnpm run update-db` separately from an environment that can reach the database before the first deployment and after schema updates.
 
+### EdgeOne Pages client IP
+
+When Umami is deployed on EdgeOne Pages, configure the platform-provided client IP header so visitor and visit de-duplication remains stable:
+
+```text
+CLIENT_IP_HEADER=EO-Connecting-IP
+```
+
+Add this variable in the EdgeOne Pages **Production** environment, then redeploy. The variable makes the API prefer EdgeOne's trusted client IP header instead of a changing proxy address. Existing historical visitor records are not automatically merged after this fix.
+
+After deployment, open the same blog in one browser and refresh it 3–5 times. Pageviews should increase on each refresh, while visitors should increase only once and visits should not increase on every refresh within the same visit period.
+
 ### Start the Application
 
 ```bash

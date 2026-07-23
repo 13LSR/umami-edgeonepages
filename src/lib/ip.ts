@@ -1,9 +1,12 @@
+import ipaddr from 'ipaddr.js';
+
 export const IP_ADDRESS_HEADERS = [
   'true-client-ip', // CDN
   'cf-connecting-ip', // Cloudflare
   'fastly-client-ip', // Fastly
   'x-nf-client-connection-ip', // Netlify
   'do-connecting-ip', // Digital Ocean
+  'eo-connecting-ip',
   'x-real-ip', // Reverse proxy
   'x-appengine-user-ip', // Google App Engine
   'x-forwarded-for',
@@ -16,45 +19,69 @@ export const IP_ADDRESS_HEADERS = [
 export function getIpAddress(headers: Headers) {
   const customHeader = process.env.CLIENT_IP_HEADER;
 
-  if (customHeader && headers.get(customHeader)) {
-    return headers.get(customHeader);
-  }
+  if (customHeader) {
+    const ip = parseHeaderValue(headers.get(customHeader), customHeader);
 
-  const header = IP_ADDRESS_HEADERS.find(name => {
-    return headers.get(name);
-  });
-
-  const ip = headers.get(header);
-
-  if (header === 'x-forwarded-for') {
-    return ip?.split(',')?.[0]?.trim();
-  }
-
-  if (header === 'forwarded') {
-    const match = ip.match(/for=(\[?[0-9a-fA-F:.]+\]?)/);
-
-    if (match) {
-      return match[1];
+    if (ip) {
+      return ip;
     }
   }
 
-  return ip;
+  for (const header of IP_ADDRESS_HEADERS) {
+    const ip = parseHeaderValue(headers.get(header), header);
+
+    if (ip) {
+      return ip;
+    }
+  }
+
+  return null;
+}
+
+function parseHeaderValue(value: string | null, header: string) {
+  if (!value?.trim()) {
+    return null;
+  }
+
+  let candidate = value.split(',')[0].trim();
+
+  if (header.toLowerCase() === 'forwarded') {
+    const match = candidate.match(/(?:^|;)\s*for=(?:"([^"]+)"|([^;]+))/i);
+
+    if (!match) {
+      return null;
+    }
+
+    candidate = (match[1] || match[2]).trim();
+  }
+
+  candidate = candidate.replace(/^"|"$/g, '').trim();
+
+  const ip = stripPort(candidate);
+
+  return ip && ipaddr.isValid(ip) ? ip : null;
 }
 
 export function stripPort(ip: string) {
-  if (ip.startsWith('[')) {
-    const endBracket = ip.indexOf(']');
+  const value = ip?.trim();
+
+  if (!value) {
+    return value;
+  }
+
+  if (value.startsWith('[')) {
+    const endBracket = value.indexOf(']');
+
     if (endBracket !== -1) {
-      return ip.slice(0, endBracket + 1);
+      return value.slice(1, endBracket);
     }
   }
 
-  const idx = ip.lastIndexOf(':');
-  if (idx !== -1) {
-    if (ip.includes('.') || /^[a-zA-Z0-9.-]+$/.test(ip.slice(0, idx))) {
-      return ip.slice(0, idx);
-    }
+  const ipv4WithPort = value.match(/^(\d{1,3}(?:\.\d{1,3}){3}):(\d+)$/);
+
+  if (ipv4WithPort) {
+    return ipv4WithPort[1];
   }
 
-  return ip;
+  return value;
 }
